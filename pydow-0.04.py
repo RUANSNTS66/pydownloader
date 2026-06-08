@@ -89,9 +89,13 @@ class DownloaderCore:
             return
         output = os.path.join(save_dir, "%(title)s.%(ext)s") if save_dir else "%(title)s.%(ext)s"
         ydl_opts = {
-            "format": "bestaudio/best",
+            "format": "bestaudio[ext=m4a]/bestaudio[ext=webm]/bestaudio/best",
             "outtmpl": output,
             "postprocessors": [{"key": "FFmpegExtractAudio", "preferredcodec": "mp3", "preferredquality": "192"}],
+            "extractor_args": {"youtube": {"skip": ["hls", "dash"]}},
+            "nocheckcertificate": True,
+            "ignoreerrors": False,
+            "retries": 5,
         }
         ydl_opts.update(self.get_auth_opts())
         try:
@@ -101,15 +105,40 @@ class DownloaderCore:
         except Exception as e:
             on_error(str(e))
 
+    def download_video(self, on_status, on_error, save_dir=None):
+        if not self.current_music:
+            on_error("Nenhuma música selecionada.")
+            return
+        output = os.path.join(save_dir, "%(title)s.%(ext)s") if save_dir else "%(title)s.%(ext)s"
+        ydl_opts = {
+            "format": "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best",
+            "outtmpl": output,
+            "merge_output_format": "mp4",
+            "nocheckcertificate": True,
+            "ignoreerrors": False,
+            "retries": 5,
+        }
+        ydl_opts.update(self.get_auth_opts())
+        try:
+            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                ydl.download([self.current_music["link"]])
+            on_status(f"✅ Vídeo baixado: {self.current_music['title']}")
+        except Exception as e:
+            on_error(str(e))
+
     def download_playlist(self, on_status, on_error, save_dir=None):
         if not self.current_playlist:
             on_error("Nenhuma playlist carregada.")
             return
         folder = os.path.join(save_dir, "playlist") if save_dir else "playlist"
         ydl_opts = {
-            "format": "bestaudio/best",
+            "format": "bestaudio[ext=m4a]/bestaudio[ext=webm]/bestaudio/best",
             "outtmpl": os.path.join(folder, "%(title)s.%(ext)s"),
             "postprocessors": [{"key": "FFmpegExtractAudio", "preferredcodec": "mp3", "preferredquality": "192"}],
+            "extractor_args": {"youtube": {"skip": ["hls", "dash"]}},
+            "nocheckcertificate": True,
+            "ignoreerrors": True,
+            "retries": 5,
         }
         ydl_opts.update(self.get_auth_opts())
         try:
@@ -365,6 +394,8 @@ class PyDownloaderApp(ctk.CTk):
                        color="#1a6e4a", height=38).pack(side="left", padx=5)
         styled_button(btn_row, "⬇  MP3", self._download_mp3,
                        color=ACCENT, height=38).pack(side="left", padx=5)
+        styled_button(btn_row, "🎬  Vídeo", self._download_video,
+                       color="#1a4a6e", height=38).pack(side="left", padx=5)
         styled_button(btn_row, "📂  Playlist", self._download_playlist,
                        color="#4a4abf", height=38).pack(side="left", padx=5)
         styled_button(btn_row, "✖  Limpar", self._clear,
@@ -502,6 +533,16 @@ class PyDownloaderApp(ctk.CTk):
         def worker():
             self.after(0, self._set_status, "Baixando MP3...", ACCENT)
             self.core.download_mp3(
+                on_status=lambda s: self.after(0, self._set_status, s),
+                on_error=lambda e: self.after(0, self._on_error, e),
+                save_dir=self.save_dir
+            )
+        threading.Thread(target=worker, daemon=True).start()
+
+    def _download_video(self):
+        def worker():
+            self.after(0, self._set_status, "Baixando vídeo...", ACCENT)
+            self.core.download_video(
                 on_status=lambda s: self.after(0, self._set_status, s),
                 on_error=lambda e: self.after(0, self._on_error, e),
                 save_dir=self.save_dir
