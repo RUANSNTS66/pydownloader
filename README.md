@@ -48,7 +48,7 @@ PyDownloader allows users to download videos and playlists from supported platfo
 4. Run the application:
 
    ```bash
-   python main.py
+   python pydow-0.04.py
    ```
 
    Replace `main.py` with the actual entry-point filename if needed.
